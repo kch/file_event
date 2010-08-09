@@ -28,11 +28,11 @@ class FSEvent::FileEvent < FSEvent
   #
   # Two forms are accepted:
   #
-  #  * with a single _path_ argument, in which case the method will be called
-  #    once for each file path that changed;
+  # * with a single _path_ argument, in which case the method will be called
+  #   repeatedly, once for each file path that changed;
   #
-  #  * with a splat *_paths_ argument, in which case the method will be only
-  #    called once, with all paths passed each as an argument.
+  # * with a splat *_paths_ argument, in which case the method will be only
+  #   called once, with all paths passed as arguments.
   def on_file_change(*paths)
     raise NotImplementedError, "Subclasses of FSEvent::FileEvent must implement on_file_change(*paths) or on_file_change(path)"
   end
@@ -45,7 +45,7 @@ class FSEvent::FileEvent < FSEvent
     directory_state_for_path(File.dirname(file_path)).touch(file_path)
   end
 
-  def start #:nodoc
+  def start #:nodoc:
     super
     @run_loop.thread.abort_on_exception = true
   end
@@ -53,7 +53,7 @@ class FSEvent::FileEvent < FSEvent
 
   private
 
-  def on_change(paths)
+  def on_change(paths) #:nodoc:
     file_paths = changed_file_paths_from_changed_directory_paths(paths)
     case method(:on_file_change).arity
     when -1 then on_file_change(*file_paths)
@@ -62,17 +62,17 @@ class FSEvent::FileEvent < FSEvent
     end
   end
 
-  def changed_file_paths_from_changed_directory_paths(dir_paths)
+  def changed_file_paths_from_changed_directory_paths(dir_paths) #:nodoc:
     dir_paths.uniq\
       .map    { |dir_path | hot_files_for_directory_path(dir_path) }.flatten\
       .select { |file_path| self.class.filters.all? { |f| f[file_path] } }
   end
 
-  def hot_files_for_directory_path(dir_path)
+  def hot_files_for_directory_path(dir_path) #:nodoc:
     directory_state_for_path(dir_path).refresh!.hot_paths
   end
 
-  def directory_state_for_path(dir_path)
+  def directory_state_for_path(dir_path) #:nodoc:
     dir_path = File.expand_path(dir_path)
     @directory_states[dir_path] ||= FSEvent::FileEvent::DirectoryState.new(dir_path, @watched_paths_glob)
   end
