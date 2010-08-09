@@ -1,0 +1,3 @@
+[submodule "vendor/fsevent"]
+	path = vendor/fsevent
+	url = git://github.com/kch/ruby-fsevent.git
