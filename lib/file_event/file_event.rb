@@ -11,13 +11,15 @@ class FSEvent::FileEvent < FSEvent
     filters << block
   end
 
-  def initialize(paths, options = {})
-    super(paths)
+  def initialize(paths, options = {}, &on_file_change_block)
+    super(*paths, &nil)
     self.latency          = options[:latency] if options[:latency]
     extensions            = options.values_at(:extension, :extensions).flatten.compact
     options[:glob]      ||= "*.{#{extensions.join(",")}}" unless extensions.empty?
     @watched_paths_glob   = options[:glob]
     @directory_states     = {}
+    return unless on_file_change_block
+    singleton_class.send(:define_method, :on_file_change, &on_file_change_block)
   end
 
   # call-seq:
