@@ -1,8 +1,12 @@
 class FSEvent::FileEvent < FSEvent
-  def self.filters
+  def self.filters #:nodoc:
     @filters ||= []
   end
 
+  # call-seq:
+  #   filter { |path| block }
+  #
+  # Adds a condition that each path must pass before it's passed to #on_file_change
   def self.filter(&block)
     filters << block
   end
@@ -16,20 +20,32 @@ class FSEvent::FileEvent < FSEvent
     @directory_states     = {}
   end
 
-  def on_change(paths)
-    file_paths = changed_file_paths_from_changed_dir_paths(paths)
-    case method(:on_file_change).arity
-    when -1 then on_file_change(*file_paths)
-    when  1 then file_paths.each { |path| on_file_change path }
-    else raise ArgumentError, "on_file_change takes either one path argument or one splat *paths argument."
-    end
+  # call-seq:
+  #   on_file_change(path)
+  #   on_file_change(*paths)
+  #
+  # Override this in your subclass to handle file change notifications.
+  #
+  # Two forms are accepted:
+  #
+  #  * with a single _path_ argument, in which case the method will be called
+  #    once for each file path that changed;
+  #
+  #  * with a splat *_paths_ argument, in which case the method will be only
+  #    called once, with all paths passed each as an argument.
+  def on_file_change(*paths)
+    raise NotImplementedError, "Subclasses of FSEvent::FileEvent must implement on_file_change(*paths) or on_file_change(path)"
   end
 
-  def touch(path)
-    directory_state_for_path(File.dirname(path)).touch(path)
+  # You should call touch on paths that you modify during #on_file_change.
+  #
+  # See FSEvent::FileEvent::DirectoryState#touch for more.
+  def touch(file_path)
+    file_path = File.expand_path(file_path)
+    directory_state_for_path(File.dirname(file_path)).touch(file_path)
   end
 
-  def start
+  def start #:nodoc
     super
     @run_loop.thread.abort_on_exception = true
   end
@@ -37,23 +53,28 @@ class FSEvent::FileEvent < FSEvent
 
   private
 
-  def on_file_change(*paths)
-    raise NotImplementedError, "Subclasses of FSEventFoo must implement on_file_change(*paths) or on_file_change(path)"
+  def on_change(paths)
+    file_paths = changed_file_paths_from_changed_directory_paths(paths)
+    case method(:on_file_change).arity
+    when -1 then on_file_change(*file_paths)
+    when  1 then file_paths.each { |path| on_file_change path }
+    else raise ArgumentError, "on_file_change takes either one path argument or one splat *paths argument."
+    end
   end
 
-  def changed_file_paths_from_changed_dir_paths(dir_paths)
+  def changed_file_paths_from_changed_directory_paths(dir_paths)
     dir_paths.uniq\
-      .map    { |path| hot_files_for_path(path) }.flatten\
-      .select { |path| self.class.filters.all? { |f| f[path] } }
+      .map    { |dir_path | hot_files_for_directory_path(dir_path) }.flatten\
+      .select { |file_path| self.class.filters.all? { |f| f[file_path] } }
   end
 
-  def directory_state_for_path(path)
-    path = File.expand_path(path)
-    @directory_states[path] ||= FSEvent::FileEvent::DirectoryState.new(path, @watched_paths_glob)
+  def hot_files_for_directory_path(dir_path)
+    directory_state_for_path(dir_path).refresh!.hot_paths
   end
 
-  def hot_files_for_path(path)
-    directory_state_for_path(path).refresh!.hot_paths
+  def directory_state_for_path(dir_path)
+    dir_path = File.expand_path(dir_path)
+    @directory_states[dir_path] ||= FSEvent::FileEvent::DirectoryState.new(dir_path, @watched_paths_glob)
   end
 
 end
